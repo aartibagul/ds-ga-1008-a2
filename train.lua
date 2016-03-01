@@ -1,6 +1,7 @@
 require 'xlua'
 require 'optim'
 require 'cunn'
+require 'image'
 dofile './provider.lua'
 local c = require 'trepl.colorize'
 
@@ -19,6 +20,7 @@ opt = lapp[[
 
 print(opt)
 
+--data augmentation code adapted from fb.resnet.torch
 do -- data augmentation module
   local BatchFlip,parent = torch.class('nn.BatchFlip', 'nn.Module')
 
@@ -38,11 +40,58 @@ do -- data augmentation module
     self.output:set(input)
     return self.output
   end
+
+
+ --rotate between 0 and 360 degrees
+  local BatchRotate,parent = torch.class('nn.BatchRotate', 'nn.Module')
+
+  function BatchRotate:__init()
+    parent.__init(self)
+    self.train = true
+  end
+
+  function BatchRotate:updateOutput(input)
+    if self.train then
+      local bs = input:size(1)
+      for i=1,input:size(1) do
+          local theta = math.rad(torch.uniform(0,360))
+          image.rotate(input[i], theta) 
+      end
+    end
+    self.output:set(input)
+    return self.output
+  end
+
+
+  --translation- random shift between -5 and 5 pixels
+  local BatchTranslate,parent = torch.class('nn.BatchTranslate', 'nn.Module')
+
+  function BatchTranslate:__init()
+    parent.__init(self)
+    self.train = true
+  end
+
+  function BatchTranslate:updateOutput(input)
+    if self.train then
+      local bs = input:size(1)
+      for i=1,input:size(1) do
+          local hshift = torch.uniform(-5,5)
+          local vshift = torch.uniform(-5,5)
+          image.translate(input[i], hshift, vshift) 
+      end
+    end
+    self.output:set(input)
+    return self.output
+  end
+
 end
 
 print(c.blue '==>' ..' configuring model')
 local model = nn.Sequential()
 model:add(nn.BatchFlip():float())
+model:add(nn.BatchRotate():float())
+model:add(nn.BatchTranslate():float())
+
 model:add(nn.Copy('torch.FloatTensor','torch.CudaTensor'):cuda())
 model:add(dofile('models/'..opt.model..'.lua'):cuda())
 model:get(2).updateGradInput = function(input) return end
