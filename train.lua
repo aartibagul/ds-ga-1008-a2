@@ -233,7 +233,7 @@ function val()
   if epoch % 5 == 0 then
     local filename = paths.concat(opt.save, 'model.net')
     print('==> saving model to '..filename)
-    torch.save(filename, model:get(3))
+    torch.save(filename, model:get(5))
   end
 
   confusion:zero()
